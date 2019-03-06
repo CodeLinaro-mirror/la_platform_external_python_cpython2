@@ -25,8 +25,7 @@ cc_defaults {
         "-Wstrict-prototypes",
         "-DPy_BUILD_CORE",
         "-Werror",
-        "-Wno-error=invalid-source-encoding",
-        "-Wno-error=macro-redefined",
+        "-Wno-invalid-source-encoding",
         "-Wno-int-conversion",
         "-Wno-missing-field-initializers",
         "-Wno-null-pointer-arithmetic",
@@ -212,21 +211,47 @@ cc_library_static {
     ],
 }
 
-cc_binary {
-    name: "py2-launcher",
+cc_defaults {
+    name: "py2-launcher-defaults",
     defaults: ["py2-interp-defaults"],
     cflags: [
         "-DVERSION=\"2.7\"",
         "-DVPATH=\"\"",
         "-DPREFIX=\"\"",
         "-DEXEC_PREFIX=\"\"",
-        "-DPYTHONPATH=\"\"",
+        "-DPYTHONPATH=\"..:\"",
+        "-DANDROID_SKIP_ZIP_PATH",
+        "-DANDROID_SKIP_EXEC_PREFIX_PATH",
+        "-DANDROID_LIB_PYTHON_PATH=\"internal/stdlib\"",
         "-DDATE=\"Dec 31 1969\"",
         "-DTIME=\"23:59:59\"",
     ],
+    static_libs: [
+        "libbase",
+        "libcrypto",
+        "libexpat",
+        "libssl",
+        "libz",
+    ],
+    target: {
+        linux_glibc_x86_64: {
+            host_ldlibs: ["-lutil"],
+        },
+        host: {
+            static_libs: ["libsqlite"],
+        },
+        // Use shared libsqlite for device side, otherwise
+        // the executable size will be really huge.
+        android: {
+            shared_libs: ["libsqlite"],
+        },
+    },
+}
+
+cc_library_static {
+    name: "py2-launcher-lib",
+    defaults: ["py2-launcher-defaults"],
     srcs: [
-        "Launcher/launcher_main.cpp",
-        "Launcher/launcher_internal.cpp",
         "Modules/gcmodule.c",
         "Modules/getpath.c",
         "Modules/config.c",
@@ -242,13 +267,10 @@ cc_binary {
         "Modules/_weakref.c",
         "Modules/zipimport.c",
         "Modules/symtablemodule.c",
-    ],
-    local_include_dirs: [
-        "Launcher",
+        "Modules/main.c",
     ],
     // NOTE: Please update Modules/config.c if new lib get added in the static_libs.
-    static_libs: [
-        "libbase",
+    whole_static_libs: [
         // Be careful the order of these three static libraries below due to
         // missing symbols issues.
         "py2-interp-object",
@@ -308,29 +330,34 @@ cc_binary {
         "py2-c-module-_sqlite3",
         "py2-c-module-_ctypes_test",
         "py2-c-module-_ctypes",
-        "libcrypto",
-        "libexpat",
-        "libssl",
-        "libz",
     ],
-    target: {
-        linux_glibc_x86_64: {
-            host_ldlibs: ["-lutil"],
-            static_libs: [
-                "libsqlite",
-            ],
+}
+
+cc_binary {
+    name: "py2-launcher",
+    defaults: ["py2-launcher-defaults"],
+    srcs: ["Launcher/launcher_main.cpp"],
+    static_libs: ["py2-launcher-lib"],
+}
+
+cc_binary {
+    name: "py2-launcher-autorun",
+    defaults: ["py2-launcher-defaults"],
+    srcs: ["Launcher/launcher_main.cpp"],
+    static_libs: ["py2-launcher-lib"],
+    cflags: ["-DANDROID_AUTORUN"],
+}
+
+python_binary_host {
+    name: "py2-cmd",
+    autorun: false,
+    version: {
+        py2: {
+            enabled: true,
+            embedded_launcher: true,
         },
-        darwin_x86_64: {
-            static_libs: [
-                "libsqlite",
-            ],
-        },
-        // Use shared libsqlite for device side, otherwise
-        // the executable size will be really huge.
-        android: {
-            shared_libs: [
-                "libsqlite",
-            ],
+        py3: {
+            enabled: false,
         },
     },
 }
@@ -809,7 +836,7 @@ cc_library_static {
         android: {
             shared_libs: [
                 "libsqlite",
-            ]
+            ],
         },
     },
 }
@@ -866,7 +893,7 @@ cc_library_static {
                 "Modules/_ctypes/libffi/src/arm/ffi.c",
                 "Modules/_ctypes/libffi/src/arm/sysv.S",
                 "Modules/_ctypes/libffi/src/arm/trampoline.S",
-            ]
+            ],
         },
         arm64: {
             // arithmetic on a pointer in _ctypes/libffi/src/aarch64/ffi.c
@@ -878,7 +905,7 @@ cc_library_static {
             srcs: [
                 "Modules/_ctypes/libffi/src/aarch64/ffi.c",
                 "Modules/_ctypes/libffi/src/aarch64/sysv.S",
-            ]
+            ],
         },
     },
     target: {
